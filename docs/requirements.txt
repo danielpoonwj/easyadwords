@@ -1,0 +1,4 @@
+googleads
+suds-jurko
+oauth2client>=2.0.1,<3.0
+unicodecsv
