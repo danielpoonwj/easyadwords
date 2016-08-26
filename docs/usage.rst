@@ -28,3 +28,9 @@ Specifying *client_customer_id* in the file is optional, but it has to be either
 
     from easyadwords import AdwordsUtility
     adwords_obj = AdwordsUtility(credential_path='path/to/credentials/googleads.yaml')
+
+Caveats
+-------
+
+If you're using other packages that rely on oauth2client, googleads dependency specifies **oauth2client<2.0.0,>=1.5.2**.
+You may have to update oauth2client separately if you're dependant on a more recent version.
