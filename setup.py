@@ -8,7 +8,6 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     'googleads',
-    'suds-jurko',
     'oauth2client>=2.0.1,<3.0',
     'unicodecsv'
 ]
