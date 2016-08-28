@@ -13,7 +13,7 @@ requirements = [
 
 setup(
     name='easyadwords',
-    version='0.1.0',
+    version='0.1.1',
     description="User friendly wrapper for Google AdWords",
     long_description=readme + '\n\n' + history,
     author="Daniel Poon",
