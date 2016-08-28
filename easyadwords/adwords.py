@@ -2,6 +2,7 @@ from datetime import datetime
 from time import sleep
 
 from io import BytesIO
+import gzip
 import unicodecsv as csv
 import re
 from ast import literal_eval
@@ -278,7 +279,7 @@ class AdwordsUtility:
             'reportName': '%s %s-%s' % (report_type, start_date.strftime('%Y%m%d'), end_date.strftime('%Y%m%d')),
             'dateRangeType': 'CUSTOM_DATE',
             'reportType': report_type,
-            'downloadFormat': 'CSV',
+            'downloadFormat': 'GZIPPED_CSV',
             'selector': {
                 'fields': map(lambda x: x['name'], fields),
                 'dateRange': {
@@ -294,7 +295,7 @@ class AdwordsUtility:
         last_error = None
         while retry_num <= self._max_retries:
             try:
-                # stream report to buffer, seek(0) and load it into csv.reader
+                # stream compressed report to buffer, seek(0), decompress and load it into csv.reader
                 report_data = BytesIO()
 
                 with closing(report_downloader.DownloadReportAsStream(
@@ -313,7 +314,7 @@ class AdwordsUtility:
                         report_data.write(chunk)
 
                 report_data.seek(0)
-                csv_reader = csv.reader(report_data)
+                csv_reader = csv.reader(gzip.GzipFile(fileobj=report_data, mode='rb'))
 
             except AdWordsReportError as e:
                 if e.code == 500:
