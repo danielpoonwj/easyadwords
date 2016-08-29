@@ -371,3 +371,67 @@ class AdwordsUtility:
                     cleaned_row.append(additional_field['value'])
 
             yield cleaned_row
+
+    def get_all_account_info(self, start_date, end_date):
+        """
+        Convenience function wrapping ACCOUNT_PERFORMANCE_REPORT to get and parse accounts info.
+        Can be used to subsequently filter out accounts without any activity for specific days.
+
+        :param start_date: Start date
+        :type start_date: datetime object
+        :param end_date: End date
+        :type start_date: datetime object
+        :return: Dictionary structured by account id > date > metrics
+        """
+
+        fields = [
+            {
+                "name": "Date",
+                "alias": "date"
+            },
+            {
+                "name": "ExternalCustomerId",
+                "alias": "account_id"
+            },
+            {
+                "name": "Cost",
+                "alias": "cost"
+            },
+            {
+                "name": "Impressions",
+                "alias": "impressions"
+            },
+            {
+                "name": "Clicks",
+                "alias": "clicks"
+            },
+            {
+                "name": "Conversions",
+                "alias": "conversions"
+            }
+        ]
+
+        account_lookup = {}
+
+        account_list = self.list_accounts()
+
+        for account in account_list:
+            report = self.get_report(
+                start_date,
+                end_date,
+                'ACCOUNT_PERFORMANCE_REPORT',
+                fields,
+                client_customer_id=account['customerId'],
+                include_zero_impressions=True
+            )
+
+            header = next(report)
+            for row in report:
+                row_dict = dict(zip(header, row))
+                report_account_id = row_dict.pop('account_id')
+                report_date = datetime.strptime(row_dict.pop('date'), '%Y-%m-%d %H:%M:%S')
+
+                account_lookup.setdefault(report_account_id, {})
+                account_lookup[report_account_id][report_date] = row_dict
+
+        return account_lookup
