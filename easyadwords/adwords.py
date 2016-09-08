@@ -7,11 +7,54 @@ import unicodecsv as csv
 import re
 from ast import literal_eval
 from contextlib import closing
+from functools import wraps
 
 from googleads import adwords
 from googleads.errors import AdWordsReportError
+from urllib2 import URLError
 
 from easyadwords.utils import serialize_soap_resp
+
+
+def retry(retries=3, delay=3, backoff=2):
+    def deco_retry(f):
+        @wraps(f)
+        def f_retry(*args, **kwargs):
+            retry_num = 1
+            last_error = None
+            max_retries = getattr(args[0], '_max_retries', retries)
+
+            while retry_num <= max_retries:
+                try:
+                    return f(*args, **kwargs)
+                except AdWordsReportError as e:
+                    if e.code >= 500:
+                        sleep_time = delay * retry_num * backoff
+                        print 'Error encountered retrieving report, sleeping for %ss. Attempt %d [%s]' % (
+                            sleep_time,
+                            retry_num,
+                            e
+                        )
+                        retry_num += 1
+                        last_error = e
+                        sleep(sleep_time)
+                    else:
+                        raise e
+                except URLError as e:
+                    sleep_time = delay * retry_num * backoff
+                    print 'Error encountered retrieving report, sleeping for %ss. Attempt %d [%s]' % (
+                        sleep_time,
+                        retry_num,
+                        e
+                    )
+                    retry_num += 1
+                    last_error = e
+                    sleep(sleep_time)
+            else:
+                raise last_error
+
+        return f_retry  # true decorator
+    return deco_retry
 
 
 class AdwordsUtility:
@@ -42,6 +85,7 @@ class AdwordsUtility:
 
         self._max_retries = max_retries
 
+    @retry()
     def change_client_customer_id(self, client_customer_id):
         """
         Set new client_customer_id.
@@ -72,6 +116,7 @@ class AdwordsUtility:
 
         return return_list
 
+    @retry()
     def get_report_fields(self, report_type, serialize=True):
         """
         Get details about report fields.
@@ -91,6 +136,7 @@ class AdwordsUtility:
 
         return fields
 
+    @retry()
     def get_service(self, service_name, selector, iterate_pages=True, serialize=True):
         """
         General purpose function for getting any service listed here: https://developers.google.com/adwords/api/docs/reference/
@@ -124,7 +170,6 @@ class AdwordsUtility:
 
         :return: list of dictionaries
         """
-
 
         selector = {
             'fields': ['LabelName', 'LabelId'],
@@ -186,6 +231,7 @@ class AdwordsUtility:
 
         return self.get_service('ManagedCustomerService', selector, serialize)
 
+    @retry()
     def get_report(self, start_date, end_date, report_type, fields, additional_fields=None, predicates=None,
                    client_customer_id=None, include_zero_impressions=False):
         """
@@ -290,44 +336,26 @@ class AdwordsUtility:
             }
         }
 
-        # retry block if Internal Server Error
-        retry_num = 1
-        last_error = None
-        while retry_num <= self._max_retries:
-            try:
-                # stream compressed report to buffer, seek(0), decompress and load it into csv.reader
-                report_data = BytesIO()
+        # stream compressed report to buffer, seek(0), decompress and load it into csv.reader
+        report_data = BytesIO()
 
-                with closing(report_downloader.DownloadReportAsStream(
-                    report,
-                    skip_column_header=True,
-                    skip_report_header=True,
-                    skip_report_summary=True,
-                    client_customer_id=client_customer_id,
-                    include_zero_impressions=include_zero_impressions
-                )) as stream_data:
+        with closing(report_downloader.DownloadReportAsStream(
+            report,
+            skip_column_header=True,
+            skip_report_header=True,
+            skip_report_summary=True,
+            client_customer_id=client_customer_id,
+            include_zero_impressions=include_zero_impressions
+        )) as stream_data:
 
-                    while True:
-                        chunk = stream_data.read(1024 * 16)
-                        if not chunk:
-                            break
-                        report_data.write(chunk)
+            while True:
+                chunk = stream_data.read(1024 * 16)
+                if not chunk:
+                    break
+                report_data.write(chunk)
 
-                report_data.seek(0)
-                csv_reader = csv.reader(gzip.GzipFile(fileobj=report_data, mode='rb'))
-
-            except AdWordsReportError as e:
-                if e.code == 500:
-                    print 'Error encountered retrieving report. Attempt %d [%s]' % (retry_num, e)
-                    retry_num += 1
-                    last_error = e
-                    sleep(retry_num * 5)
-                else:
-                    raise e
-            else:
-                break
-        else:
-            raise last_error
+        report_data.seek(0)
+        csv_reader = csv.reader(gzip.GzipFile(fileobj=report_data, mode='rb'))
 
         # clean data
         report_fields = self.get_report_fields(report_type)
