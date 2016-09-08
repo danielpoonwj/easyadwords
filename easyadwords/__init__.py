@@ -4,4 +4,4 @@ import easyadwords.utils
 
 __author__ = 'Daniel Poon'
 __email__ = 'daniel.poon.wenjie@gmail.com'
-__version__ = '0.1.2'
+__version__ = '0.1.3'
